@@ -1,0 +1,26 @@
+# secrets — never, ever
+.env
+.envrc
+*.key
+*-credentials.json
+service-account*.json
+
+# build output
+/bin/
+/dist/
+*.exe
+
+# terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# local data
+/data/
+*.db
+
+.DS_Store
+
+
+
