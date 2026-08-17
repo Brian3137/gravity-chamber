@@ -1,0 +1,36 @@
+name: gravity-chamber
+
+services:
+  scouter:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: scouter:dev
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"   # from your shell, with a default
+    restart: unless-stopped
+    healthcheck:
+      # distroless has no shell and no curl, so we use the binary's own
+      # ability to... not do this. See the note below — this is why the
+      # healthcheck lives outside the container in compose.
+      test: ["CMD", "/scouter", "-health"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 5s
+
+  # A stand-in load generator. Capsule 09 replaces it with k6.
+  pinger:
+    image: alpine:3.20
+    depends_on:
+      - scouter
+    command: >
+      sh -c "apk add --no-cache curl >/dev/null &&
+             while true; do
+               curl -s -o /dev/null http://scouter:8080/healthz;
+               sleep 2;
+             done"
+    profiles: ["load"]      # only starts with: --profile load

@@ -14,7 +14,22 @@ import (
 )
 
 func main() {
+	// A self-check mode so container healthchecks work on a distroless image
+	// with no shell and no curl. Exits 0 if the service answers, 1 otherwise.
+	if len(os.Args) > 1 && os.Args[1] == "-health" {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		resp, err := http.Get("http://127.0.0.1:" + port + "/healthz")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
 	cfg, err := scouter.LoadConfig()
+
 	if err != nil {
 		slog.Error("invalid configuration", "err", err)
 		os.Exit(1)
