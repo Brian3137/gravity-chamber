@@ -34,3 +34,14 @@ docker-build:
 ## docker-run: run the image locally
 docker-run:
 	docker run --rm -p 8080:8080 -e LOG_LEVEL=debug $(IMAGE):latest
+## up: start the local stack
+up:
+	docker compose -f deploy/docker-compose.yml up --build -d
+
+## down: stop the local stack
+down:
+	docker compose -f deploy/docker-compose.yml down
+
+## logs: tail the stack
+logs:
+	docker compose -f deploy/docker-compose.yml logs -f
