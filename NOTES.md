@@ -31,3 +31,12 @@ Que Terraform detecte drift y que un cambio aparentemente simple pueda provocar 
 
 ### Pregunta
 ¿Cómo funciona el state de Terraform y cómo se conecta todo esto con GCP y Cloud Run?
+
+
+| --cpus | tiempo | speedup vs 0.25 | lineal sería |
+|--------|--------|------------------|--------------|
+| 0.25   | 117.11s | 1.00×           | 1×           |
+| 0.5    | 65.66s  | 1.78×           | 2×           |
+| 1      | 38.285s | 3.06×           | 4×           |
+| 2      | 6.140s  | 19.07×          | 8×           |
+| 4      | 3.235s  | 36.20×          | 16×          |

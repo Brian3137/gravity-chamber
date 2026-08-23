@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+	"crypto/sha256"
+	"encoding/hex"
+	"runtime"
 )
 
 type Server struct {
@@ -33,6 +36,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /readings", s.handleRecord)
 	mux.HandleFunc("GET /fighters/{name}", s.handleGetFighter)
 	mux.HandleFunc("GET /leaderboard", s.handleLeaderboard)
+	mux.HandleFunc("GET /train", s.handleTrain)
+	
 
 	return s.withLogging(mux)
 }
@@ -145,4 +150,41 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func writeErr(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
+}
+
+
+// handleTrain burns CPU on purpose: a deliberately serial hash chain that
+// no amount of parallelism inside one request can speed up.
+//
+// CALIBRATE `rounds` ON YOUR MACHINE — do not trust a number from a README.
+// ARM chips (Apple Silicon, Graviton) have SHA-256 in hardware and run this
+// loop roughly 5x faster than an x86 core without the extension. On an M-series
+// Mac 1,000,000 rounds is ~100ms; on an older x86 laptop 200,000 might be.
+func (s *Server) handleTrain(w http.ResponseWriter, r *http.Request) {
+	rounds := 1_000_000
+	if v := r.URL.Query().Get("rounds"); v != "" {
+		// NOTE THE SILENT FALLBACK. Ask for more than the cap and you get the
+		// DEFAULT, with no error — so a too-large `rounds` looks like a very
+		// fast machine rather than a rejected request. Always check
+		// `duration_ms` in the response rather than trusting what you asked
+		// for. (Capsule 07 leans on this endpoint; if its "slow" requests come
+		// back in 20ms, this is why.)
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50_000_000 {
+			rounds = n
+		}
+	}
+
+	start := time.Now()
+	sum := sha256.Sum256([]byte("kaio-ken"))
+	for i := 0; i < rounds; i++ {
+		sum = sha256.Sum256(sum[:]) // each round needs the previous one
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"rounds":      rounds,
+		"digest":      hex.EncodeToString(sum[:8]),
+		"duration_ms": time.Since(start).Milliseconds(),
+		"gomaxprocs":  runtime.GOMAXPROCS(0),
+		"num_cpu":     runtime.NumCPU(),
+	})
 }
