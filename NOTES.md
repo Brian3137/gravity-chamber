@@ -40,3 +40,19 @@ Que Terraform detecte drift y que un cambio aparentemente simple pueda provocar 
 | 1      | 38.285s | 3.06×           | 4×           |
 | 2      | 6.140s  | 19.07×          | 8×           |
 | 4      | 3.235s  | 36.20×          | 16×          |
+
+
+
+## Capsula 6 
+
+grep -rn "sync\.\|map\[\|os.Create\|ioutil.WriteFile\|time.Ticker" internal/ cmd/
+
+internal/scouter/store.go:20:   mu      sync.RWMutex
+internal/scouter/store.go:21:   byFight map[string][]Reading
+internal/scouter/store.go:25:   return &MemStore{byFight: make(map[string][]Reading)}
+internal/scouter/server_test.go:45:     for name, body := range map[string]string{
+internal/scouter/server.go:75:  writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+internal/scouter/server.go:80:          writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "draining"})
+internal/scouter/server.go:83:  writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
+internal/scouter/server.go:152: writeJSON(w, code, map[string]string{"error": msg})
+internal/scouter/server.go:183: writeJSON(w, http.StatusOK, map[string]any{

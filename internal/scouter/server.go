@@ -13,16 +13,22 @@ import (
 )
 
 type Server struct {
-	store *MemStore
+	store Store  // was :_MemStore
 	log   *slog.Logger
 	ready atomic.Bool
 }
 
-func NewServer(store *MemStore, log *slog.Logger) *Server {
-	s := &Server{store: store, log: log}
+func NewServer(store Store, log *slog.Logger) *Server {
+    s := &Server{store: store, log: log}
 	s.ready.Store(true)
-	return s
+	return s	
 }
+
+//func NewServer(store *MemStore, log *slog.Logger) *Server {
+//	s := &Server{store: store, log: log}
+//	s.ready.Store(true)
+//	return s
+//}
 
 func (s *Server) NotReady() {
 	s.ready.Store(false)

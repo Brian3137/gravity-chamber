@@ -13,6 +13,19 @@ type Reading struct {
 	RecordedAt time.Time `json:"recorded_at"`
 }
 
+// Store is the persistence boundary. MemStore implements it today and is
+// wrong for more than one replica; Capsule 10 adds a Postgres implementation
+// and nothing else in the service has to change.
+type Store interface {
+	Record(r Reading)
+	Latest(fighter string) (Reading, bool)
+	Leaderboard(n int) []Reading
+}
+
+// Compile-time proof that MemStore satisfies Store. If it ever stops
+// matching, the build breaks here rather than at some call site.
+var _ Store = (*MemStore)(nil)
+
 // MemStore is an in-memory store.
 // it dies with the process and cannot be shared between replicas.
 // Capsule 06 will make that hurt, and Capsule 10 will fix it.

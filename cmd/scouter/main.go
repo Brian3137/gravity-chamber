@@ -47,6 +47,12 @@ func main() {
 		),
 	)
 
+		// Every log line now carries the instance identity. In a container the
+	// hostname is the container ID; on Cloud Run, set INSTANCE_ID from the
+	// metadata server or just let the hostname be the revision instance.
+	host, _ := os.Hostname()
+	log = log.With("instance", host)
+
 	srv := scouter.NewServer(scouter.NewMemStore(), log)
 
 	httpSrv := &http.Server{
