@@ -56,3 +56,7 @@ internal/scouter/server.go:80:          writeJSON(w, http.StatusServiceUnavailab
 internal/scouter/server.go:83:  writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 internal/scouter/server.go:152: writeJSON(w, code, map[string]string{"error": msg})
 internal/scouter/server.go:183: writeJSON(w, http.StatusOK, map[string]any{
+
+
+## Capsula 8 
+La auth en el borde es tan fuerte como el aislamiento de red que hay detrás.

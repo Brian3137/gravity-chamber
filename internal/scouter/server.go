@@ -71,6 +71,9 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
+			"api_key_seen", r.Header.Get("X-Api-Key"),   // should always be empty
+			"caller", r.Header.Get("X-Caller"),          // set by the gateway
+			"request_id", r.Header.Get("X-Request-Id"),
 		)
 	})
 }
