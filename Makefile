@@ -45,3 +45,7 @@ down:
 ## logs: tail the stack
 logs:
 	docker compose -f deploy/docker-compose.yml logs -f
+
+## loadtest: smoke test with SLO thresholds (fails the build if breached)
+loadtest:
+	k6 run scripts/load/smoke.js
