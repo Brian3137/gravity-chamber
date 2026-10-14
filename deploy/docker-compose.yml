@@ -11,6 +11,10 @@ services:
     environment:
       PORT: "8080"
       LOG_LEVEL: "${LOG_LEVEL:-info}"   # from your shell, with a default
+      DATABASE_URL: "postgres://scouter:kamehameha@postgres:5432/scouter?sslmode=disable"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       # distroless has no shell and no curl, so we use the binary's own
@@ -34,3 +38,23 @@ services:
                sleep 2;
              done"
     profiles: ["load"]      # only starts with: --profile load
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scouter
+      POSTGRES_PASSWORD: kamehameha      # local only — see the note below
+      POSTGRES_DB: scouter
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro   # *.sql here runs on first boot
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scouter"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+volumes:
+  pgdata:

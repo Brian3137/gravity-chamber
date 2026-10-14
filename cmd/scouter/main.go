@@ -53,7 +53,15 @@ func main() {
 	host, _ := os.Hostname()
 	log = log.With("instance", host)
 
-	srv := scouter.NewServer(scouter.NewMemStore(), log)
+	//srv := scouter.NewServer(scouter.NewMemStore(), log)
+		store, err := scouter.NewPostgresStore(context.Background(), cfg.DatabaseURL)
+	if err != nil {
+		log.Error("database unavailable at startup", "err", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	srv := scouter.NewServer(store, log)
 
 	httpSrv := &http.Server{
 		Addr:    ":" + cfg.Port,

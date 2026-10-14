@@ -1,6 +1,7 @@
 package scouter
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -84,10 +85,20 @@ func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
 }
 
-func (s *Server) handleReadyz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if !s.ready.Load() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "draining"})
 		return
+	}
+	// Readiness checks dependencies. Liveness never does.
+	if p, ok := s.store.(interface{ Ping(context.Context) error }); ok {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := p.Ping(ctx); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable,
+				map[string]string{"status": "database unreachable"})
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }

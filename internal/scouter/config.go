@@ -1,6 +1,7 @@
 package scouter
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 type Config struct {
 	Port            string
 	LogLevel        string
+	DatabaseURL		string
 	ShutdownTimeout time.Duration
 	DrainDelay      time.Duration
 }
@@ -24,6 +26,10 @@ func LoadConfig() (Config, error) {
 
 	if _, err := strconv.Atoi(c.Port); err != nil {
 		return c, fmt.Errorf("PORT %q is not a number", c.Port)
+	}
+	c.DatabaseURL = os.Getenv("DATABASE_URL")
+	if c.DatabaseURL == "" {
+		return c, errors.New("DATABASE_URL is required")
 	}
 
 	return c, nil

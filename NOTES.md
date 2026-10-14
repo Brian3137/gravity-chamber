@@ -63,3 +63,9 @@ La auth en el borde es tan fuerte como el aislamiento de red que hay detrás.
 
 ## Capsula 9
 "Un test de modelo cerrado no puede encontrar mi punto de quiebre."
+
+## Capsula 10
+este comando no anda : docker compose up -d --scale scouter=3
+# (put the nginx lb from Capsule 07 in front, or just hit each container)
+
+seria este comando para q funcione : ➜ docker compose -f docker-compose.scale.yml up -d --scale scouter=3
