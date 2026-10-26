@@ -55,6 +55,45 @@ services:
       interval: 3s
       timeout: 2s
       retries: 10
+  
+  shard0:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scouter
+      POSTGRES_PASSWORD: kamehameha
+      POSTGRES_DB: scouter
+    ports:
+      - "5433:5432"
+    volumes:
+      - shard0data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scouter"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
 
+
+  
+  shard1:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scouter
+      POSTGRES_PASSWORD: kamehameha
+      POSTGRES_DB: scouter
+    ports:
+      - "5434:5432"
+    volumes:
+      - shard1data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scouter"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+
+  
 volumes:
   pgdata:
+  shard0data:
+  shard1data:

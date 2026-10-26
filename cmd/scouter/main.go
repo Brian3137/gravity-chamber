@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,13 +55,25 @@ func main() {
 	log = log.With("instance", host)
 
 	//srv := scouter.NewServer(scouter.NewMemStore(), log)
-		store, err := scouter.NewPostgresStore(context.Background(), cfg.DatabaseURL)
-	if err != nil {
-		log.Error("database unavailable at startup", "err", err)
-		os.Exit(1)
+		var store scouter.Store
+	if dsns := os.Getenv("SHARD_URLS"); dsns != "" {
+		sharded, err := scouter.NewShardedStore(context.Background(), strings.Split(dsns, ","))
+		if err != nil {
+			log.Error("shards unavailable", "err", err)
+			os.Exit(1)
+		}
+		defer sharded.Close()
+		store = sharded
+		log.Info("sharded store", "shards", len(strings.Split(dsns, ",")))
+	} else {
+		pg, err := scouter.NewPostgresStore(context.Background(), cfg.DatabaseURL)
+		if err != nil {
+			log.Error("database unavailable", "err", err)
+			os.Exit(1)
+		}
+		defer pg.Close()
+		store = pg
 	}
-	defer store.Close()
-
 	srv := scouter.NewServer(store, log)
 
 	httpSrv := &http.Server{
