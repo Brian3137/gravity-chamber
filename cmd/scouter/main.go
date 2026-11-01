@@ -48,14 +48,14 @@ func main() {
 		),
 	)
 
-		// Every log line now carries the instance identity. In a container the
+	// Every log line now carries the instance identity. In a container the
 	// hostname is the container ID; on Cloud Run, set INSTANCE_ID from the
 	// metadata server or just let the hostname be the revision instance.
 	host, _ := os.Hostname()
 	log = log.With("instance", host)
 
 	//srv := scouter.NewServer(scouter.NewMemStore(), log)
-		var store scouter.Store
+	var store scouter.Store
 	if dsns := os.Getenv("SHARD_URLS"); dsns != "" {
 		sharded, err := scouter.NewShardedStore(context.Background(), strings.Split(dsns, ","))
 		if err != nil {
@@ -73,6 +73,23 @@ func main() {
 		}
 		defer pg.Close()
 		store = pg
+
+		if urls := os.Getenv("REPLICA_URLS"); urls != "" {
+			var replicas []*scouter.PostgresStore
+
+			for _, dsn := range strings.Split(urls, ",") {
+				r, err := scouter.NewPostgresStore(context.Background(), dsn)
+				if err != nil {
+					log.Error("replica unavailable", "err", err)
+					os.Exit(1)
+				}
+				defer r.Close()
+				replicas = append(replicas, r)
+			}
+
+			store = scouter.NewReplicatedStore(pg, replicas, 5*time.Second)
+			log.Info("replicated store", "replicas", len(replicas))
+		}
 	}
 	srv := scouter.NewServer(store, log)
 

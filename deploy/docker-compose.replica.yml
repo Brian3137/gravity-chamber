@@ -1,0 +1,42 @@
+name: gravity-chamber-replica
+
+services:
+  primary:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: scouter
+      POSTGRES_PASSWORD: kamehameha
+      POSTGRES_DB: scouter
+    # initdb's default pg_hba.conf allows replication from localhost ONLY, so
+    # without this the standby's pg_basebackup is refused. See Senzu.
+    volumes:
+      - ./sql-replication:/docker-entrypoint-initdb.d:ro
+    command: >
+      postgres
+      -c wal_level=replica
+      -c max_wal_senders=5
+      -c max_replication_slots=5
+      -c hot_standby=on
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scouter"]
+      interval: 3s
+      retries: 15
+
+  replica:
+    image: postgres:16-alpine
+    depends_on:
+      primary:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: kamehameha
+    ports: ["5435:5432"]
+    user: postgres
+    # pg_basebackup clones the primary, then we start as a hot standby.
+    command: >
+      bash -c '
+        if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+          pg_basebackup -h primary -U scouter -D /var/lib/postgresql/data -Fp -Xs -P -R
+        fi
+        chmod 0700 /var/lib/postgresql/data
+        exec postgres -c hot_standby=on'
