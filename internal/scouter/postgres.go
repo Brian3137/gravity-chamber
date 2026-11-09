@@ -130,3 +130,12 @@ func (s *PostgresStore) Leaderboard(n int) []Reading {
 	}
 	return out
 }
+
+// SlowLeaderboard simulates an expensive uncached query — the kind that is
+// fine at 10 QPS and fatal at 1000.
+func (s *PostgresStore) SlowLeaderboard(n int) []Reading {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, _ = s.pool.Exec(ctx, "SELECT pg_sleep(0.3)")
+	return s.Leaderboard(n)
+}

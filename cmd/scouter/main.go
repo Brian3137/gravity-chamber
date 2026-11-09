@@ -92,10 +92,12 @@ func main() {
 		}
 	}
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
-		cached := scouter.NewCachedStore(store, addr, 30*time.Second, log)
+		//cached := scouter.NewCachedStore(store, addr, 30*time.Second, log)
+		cached := scouter.NewCachedStore(store, addr, 5*time.Second, log)
 		defer cached.Close()
 		store = cached
-		log.Info("cache enabled", "addr", addr, "ttl", "30s")
+		log.Info("cache enabled", "addr", addr, "ttl", "5s")
+		//log.Info("cache enabled", "addr", addr, "ttl", "30s")
 	}
 	srv := scouter.NewServer(store, log)
 
