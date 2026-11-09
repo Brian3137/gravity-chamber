@@ -44,7 +44,22 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /fighters/{name}", s.handleGetFighter)
 	mux.HandleFunc("GET /leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("GET /train", s.handleTrain)
-	
+	mux.HandleFunc("GET /cache-stats", func(w http.ResponseWriter, r *http.Request) {
+    type statser interface {
+        Stats() (uint64, uint64, uint64, float64)
+    }
+
+    s2, ok := s.store.(statser)
+    if !ok {
+        writeErr(w, http.StatusNotFound, "cache not enabled")
+        return
+    }
+
+    h, m, e, ratio := s2.Stats()
+    writeJSON(w, http.StatusOK, map[string]any{
+        "hits": h, "misses": m, "errors": e, "hit_ratio": ratio,
+    })
+})
 
 	return s.withLogging(mux)
 }

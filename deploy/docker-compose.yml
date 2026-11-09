@@ -92,6 +92,18 @@ services:
       timeout: 2s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: >
+      redis-server
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 10
   
 volumes:
   pgdata:

@@ -91,6 +91,12 @@ func main() {
 			log.Info("replicated store", "replicas", len(replicas))
 		}
 	}
+	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
+		cached := scouter.NewCachedStore(store, addr, 30*time.Second, log)
+		defer cached.Close()
+		store = cached
+		log.Info("cache enabled", "addr", addr, "ttl", "30s")
+	}
 	srv := scouter.NewServer(store, log)
 
 	httpSrv := &http.Server{
