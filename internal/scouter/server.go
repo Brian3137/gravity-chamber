@@ -2,27 +2,27 @@ package scouter
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strconv"
 	"sync/atomic"
 	"time"
-	"crypto/sha256"
-	"encoding/hex"
-	"runtime"
 )
 
 type Server struct {
-	store Store  // was :_MemStore
+	store Store // was :_MemStore
 	log   *slog.Logger
 	ready atomic.Bool
 }
 
 func NewServer(store Store, log *slog.Logger) *Server {
-    s := &Server{store: store, log: log}
+	s := &Server{store: store, log: log}
 	s.ready.Store(true)
-	return s	
+	return s
 }
 
 //func NewServer(store *MemStore, log *slog.Logger) *Server {
@@ -45,21 +45,21 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("GET /train", s.handleTrain)
 	mux.HandleFunc("GET /cache-stats", func(w http.ResponseWriter, r *http.Request) {
-    type statser interface {
-        Stats() (uint64, uint64, uint64, float64)
-    }
+		type statser interface {
+			Stats() (uint64, uint64, uint64, float64)
+		}
 
-    s2, ok := s.store.(statser)
-    if !ok {
-        writeErr(w, http.StatusNotFound, "cache not enabled")
-        return
-    }
+		s2, ok := s.store.(statser)
+		if !ok {
+			writeErr(w, http.StatusNotFound, "cache not enabled")
+			return
+		}
 
-    h, m, e, ratio := s2.Stats()
-    writeJSON(w, http.StatusOK, map[string]any{
-        "hits": h, "misses": m, "errors": e, "hit_ratio": ratio,
-    })
-})
+		h, m, e, ratio := s2.Stats()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"hits": h, "misses": m, "errors": e, "hit_ratio": ratio,
+		})
+	})
 
 	return s.withLogging(mux)
 }
@@ -87,8 +87,8 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 			"path", r.URL.Path,
 			"status", rec.status,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"api_key_seen", r.Header.Get("X-Api-Key"),   // should always be empty
-			"caller", r.Header.Get("X-Caller"),          // set by the gateway
+			"api_key_seen", r.Header.Get("X-Api-Key"), // should always be empty
+			"caller", r.Header.Get("X-Caller"), // set by the gateway
 			"request_id", r.Header.Get("X-Request-Id"),
 		)
 	})
@@ -167,16 +167,43 @@ func (s *Server) handleGetFighter(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	limit := 10
-
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
 			limit = n
 		}
 	}
+	board := s.store.Leaderboard(limit)
 
-	writeJSON(w, http.StatusOK, s.store.Leaderboard(limit))
+	body, err := json.Marshal(board)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "encode failed")
+		return
+	}
+
+	// A strong ETag: a hash of exactly the bytes we would send.
+	sum := sha256.Sum256(body)
+	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	w.Header().Set("ETag", etag)
+
+	// public          — shared caches may store it (it is not personalised)
+	// max-age=10      — browsers hold it 10s
+	// s-maxage=30     — the CDN holds it 30s (longer; it serves many users)
+	// stale-while-revalidate=60 — nobody ever waits for a refresh
+	// stale-if-error=300        — if the origin dies, keep serving for 5 min
+	w.Header().Set("Cache-Control",
+		"public, max-age=10, s-maxage=30, stale-while-revalidate=60, stale-if-error=300")
+	w.Header().Set("Vary", "Accept-Encoding")
+
+	// Conditional request: the client already has this exact body.
+	if match := r.Header.Get("If-None-Match"); match == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	_, _ = w.Write(body)
 }
-
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -186,7 +213,6 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 func writeErr(w http.ResponseWriter, code int, msg string) {
 	writeJSON(w, code, map[string]string{"error": msg})
 }
-
 
 // handleTrain burns CPU on purpose: a deliberately serial hash chain that
 // no amount of parallelism inside one request can speed up.
