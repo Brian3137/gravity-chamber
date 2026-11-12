@@ -16,21 +16,22 @@ import (
 )
 
 type localCacheEntry struct {
-    reading   Reading
-    found     bool
-    expiresAt time.Time
+	reading   Reading
+	found     bool
+	expiresAt time.Time
 }
 
 // CachedStore wraps any Store with cache-aside caching in Redis.
 // It is a decorator: the wrapped Store has no idea a cache exists.
 type CachedStore struct {
-	inner Store
-	rdb   *redis.Client
-	log   *slog.Logger
-	ttl   time.Duration
-	sf    singleflight.Group
+	inner     Store
+	rdb       *redis.Client
+	log       *slog.Logger
+	ttl       time.Duration
+	sf        singleflight.Group
 	coalesced atomic.Uint64
-	local sync.Map
+	local     sync.Map
+	breaker   *Breaker
 
 	hits, misses, errs atomic.Uint64
 }
@@ -47,8 +48,9 @@ func NewCachedStore(inner Store, addr string, ttl time.Duration, log *slog.Logge
 			WriteTimeout: 200 * time.Millisecond, // slower than the database
 			PoolSize:     20,
 		}),
-		log: log,
-		ttl: ttl,
+		log:     log,
+		ttl:     ttl,
+		breaker: NewBreaker(5, 5*time.Second),
 	}
 }
 
@@ -61,8 +63,6 @@ func (c *CachedStore) jittered() time.Duration {
 
 func fighterKey(name string) string { return "scouter:fighter:" + name }
 func boardKey(n int) string         { return "scouter:board:" + strconv.Itoa(n) }
-
-
 
 func (c *CachedStore) Latest(fighter string) (Reading, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -83,9 +83,29 @@ func (c *CachedStore) Latest(fighter string) (Reading, bool) {
 	}
 
 	// 2. Check Redis.
-	raw, err := c.rdb.Get(ctx, key).Bytes()
+	//raw, err := c.rdb.Get(ctx, key).Bytes()
+	var raw []byte
+	var miss bool
+
+	err := c.breaker.Do(func() error {
+		b, gerr := c.rdb.Get(ctx, key).Bytes()
+
+		if errors.Is(gerr, redis.Nil) {
+			miss = true
+			return nil
+		}
+
+		raw = b
+		return gerr
+	})
+
+	if errors.Is(err, ErrCircuitOpen) {
+		miss = true
+		err = nil
+	}
+
 	switch {
-	case err == nil:
+	case err == nil && !miss:
 		if string(raw) == "null" {
 			c.hits.Add(1)
 			return Reading{}, false
@@ -98,7 +118,7 @@ func (c *CachedStore) Latest(fighter string) (Reading, bool) {
 		}
 		// Corrupt entry — treat as a miss and overwrite below.
 
-	case errors.Is(err, redis.Nil):
+	case miss:
 		c.misses.Add(1)
 
 	default:
@@ -136,7 +156,6 @@ func (c *CachedStore) Latest(fighter string) (Reading, bool) {
 
 	return r, true
 }
-
 
 func (c *CachedStore) Leaderboard(n int) []Reading {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -187,7 +206,6 @@ func (c *CachedStore) Leaderboard(n int) []Reading {
 
 	return v.([]Reading)
 }
-
 
 func (c *CachedStore) Record(r Reading) {
 	c.inner.Record(r) // database first: it is the source of truth

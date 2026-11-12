@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -44,6 +45,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /fighters/{name}", s.handleGetFighter)
 	mux.HandleFunc("GET /leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("GET /train", s.handleTrain)
+	mux.HandleFunc("GET /slow", s.handleSlow)
 	mux.HandleFunc("GET /cache-stats", func(w http.ResponseWriter, r *http.Request) {
 		type statser interface {
 			Stats() (uint64, uint64, uint64, float64)
@@ -61,7 +63,19 @@ func (s *Server) Routes() http.Handler {
 		})
 	})
 
-	return s.withLogging(mux)
+	limiter := NewLimiter(50, 100)
+
+	byIP := func(r *http.Request) string {
+		if c := r.Header.Get("X-Caller"); c != "" {
+			return c
+		}
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		return host
+	}
+
+	shedder := NewShedder(100)
+
+	return s.withLogging(shedder.Middleware(limiter.Middleware(byIP)(mux)))
 }
 
 // --- middleware -------------------------------------------------------------
@@ -98,6 +112,19 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "alive"})
+}
+
+func (s *Server) handleSlow(w http.ResponseWriter, r *http.Request) {
+	select {
+	case <-time.After(3 * time.Second):
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "completed",
+		})
+
+	case <-r.Context().Done():
+		s.log.Info("client left before slow request completed")
+		return
+	}
 }
 
 func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
