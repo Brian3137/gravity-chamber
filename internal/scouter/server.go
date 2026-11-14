@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/brian3137/gravity-chamber/internal/events"
+	"github.com/google/uuid"
 	"log/slog"
 	"net"
 	"net/http"
@@ -14,16 +16,25 @@ import (
 	"time"
 )
 
+type Publisher interface {
+	PublishPowerRecorded(ctx context.Context, e events.PowerRecorded) error
+}
+
 type Server struct {
-	store Store // was :_MemStore
-	log   *slog.Logger
-	ready atomic.Bool
+	store     Store // was :_MemStore
+	log       *slog.Logger
+	ready     atomic.Bool
+	publisher Publisher
 }
 
 func NewServer(store Store, log *slog.Logger) *Server {
 	s := &Server{store: store, log: log}
 	s.ready.Store(true)
 	return s
+}
+
+func (s *Server) SetPublisher(p Publisher) {
+	s.publisher = p
 }
 
 //func NewServer(store *MemStore, log *slog.Logger) *Server {
@@ -168,6 +179,23 @@ func (s *Server) handleRecord(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.store.Record(rd)
+
+	if s.publisher != nil {
+		ev := events.PowerRecorded{
+			EventID:    uuid.NewString(),
+			Fighter:    rd.Fighter,
+			Power:      rd.Power,
+			RecordedAt: rd.RecordedAt,
+			Version:    1,
+		}
+		if err := s.publisher.PublishPowerRecorded(r.Context(), ev); err != nil {
+			// The write succeeded and the event did not. The data is correct
+			// but downstream will never learn about it. This is the "dual
+			// write problem" and Capsule 21 fixes it properly with an outbox.
+			s.log.Error("event publish failed after commit", "err", err,
+				"fighter", rd.Fighter)
+		}
+	}
 
 	if in.Power > 9000 {
 		s.log.Warn(

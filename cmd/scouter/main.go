@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/brian3137/gravity-chamber/internal/events"
 	"github.com/brian3137/gravity-chamber/internal/scouter"
 )
 
@@ -100,6 +101,24 @@ func main() {
 		//log.Info("cache enabled", "addr", addr, "ttl", "30s")
 	}
 	srv := scouter.NewServer(store, log)
+
+	if projectID := os.Getenv("PUBSUB_PROJECT_ID"); projectID != "" {
+		topicID := os.Getenv("TOPIC_ID")
+		if topicID == "" {
+			topicID = "power-readings"
+		}
+
+		pub, err := events.NewPublisher(context.Background(), projectID, topicID, log)
+		if err != nil {
+			log.Error("pubsub unavailable", "err", err)
+			os.Exit(1)
+		}
+
+		defer pub.Close()
+		srv.SetPublisher(pub)
+
+		log.Info("pubsub publisher enabled", "topic", topicID)
+	}
 
 	httpSrv := &http.Server{
 		Addr:    ":" + cfg.Port,
